@@ -52,7 +52,13 @@ The output shows two Roman-related columns by default:
 - Roman: a simplified figure (e.g., `iv`, `iv6`, `iv64`, `V7`, `V65`, `V43`, `V42`).
 - Figure: the detailed figure from `music21` (may include additional suspensions like `532`).
 
-### Per-chord MIDI export
+Additional columns:
 
-By default, the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Each file contains the chord’s notes with the duration taken from the chordified reduction.
+- Inversion: human-readable inversion label (`root`, `1st`, `2nd`, `3rd`).
+- Function: brief function classification (`Tonic`, `Predominant`, `Dominant`, `Secondary ...`, or `Chromatic`).
+
+### MIDI exports
+
+- Per-chord: the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Each file contains the chord’s notes with the duration taken from the chordified reduction.
+- Combined: the script also writes a single file named `<input_stem>_chord_infos.mid` next to your input. It contains all detected chords placed at their offsets with measured durations, forming a simple harmonic reduction timeline.
 

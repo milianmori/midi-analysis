@@ -268,6 +268,22 @@ def export_chord_midis(export_dir: Path, analyzed: List[AnalyzedChord]) -> None:
         s.write("midi", fp=str(out_path))
 
 
+def export_combined_chord_midi(output_path: Path, analyzed: List[AnalyzedChord]) -> None:
+    """Write a single MIDI file containing all analyzed chords at their offsets.
+
+    The resulting file is a simple harmonic reduction: each chord is placed at
+    its quantized offset with its measured duration. A neutral tempo is added
+    for reasonable playback in DAWs.
+    """
+    s = m21_stream.Stream()
+    s.append(m21_tempo.MetronomeMark(number=120))
+    for entry in analyzed:
+        ch = m21_chord.Chord(list(entry.pitch_names))
+        ch.duration.quarterLength = max(0.25, float(entry.duration_quarter))
+        s.insert(float(entry.offset_quarter), ch)
+    s.write("midi", fp=str(output_path))
+
+
 def analyze_chords(
     midi_path: Path,
     key_override: Optional[m21_key.Key],
@@ -435,6 +451,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         export_chord_midis(export_dir, analyzed)
     except Exception as exc:
         print(f"Warning: failed exporting per-chord MIDIs: {exc}", file=sys.stderr)
+
+    # Always export a combined chord MIDI named "<midi-stem>_chord_infos.mid"
+    try:
+        combined_out = midi_path.parent / f"{midi_path.stem}_chord_infos.mid"
+        export_combined_chord_midi(combined_out, analyzed)
+    except Exception as exc:
+        print(f"Warning: failed exporting combined chord MIDI: {exc}", file=sys.stderr)
 
     header_left = f"File: {midi_path.name}"
     header_right = f"Key: {effective_key.tonic.name} {effective_key.mode}"
