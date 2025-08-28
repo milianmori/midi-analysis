@@ -50,6 +50,7 @@ python3 analyze_midi.py path/to/song.mid --key "C major" --bpm 120
 The output shows two Roman-related columns by default:
 
 - Roman: a simplified figure (e.g., `iv`, `iv6`, `iv64`, `V7`, `V65`, `V43`, `V42`).
+- Chord: a chord symbol text (e.g., `CMaj7`, `Am`), derived from the chord's pitch content.
 - Figure: the detailed figure from `music21` (may include additional suspensions like `532`).
 
 Additional columns:
@@ -59,6 +60,6 @@ Additional columns:
 
 ### MIDI exports
 
-- Per-chord: the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Files are named `<input_stem>-<order>-<chord-name>.mid` (e.g., `song-01-V7.mid`) where `<order>` is zero-padded to two digits based on the chord's appearance order. Each file contains the chord’s notes with the duration taken from the chordified reduction.
+- Per-chord: the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Files are named `<input_stem>-<order>-<chord-name>.mid` (e.g., `song-01-V7.mid`) where `<order>` is zero-padded to two digits and `<chord-name>` is the simplified Roman label.
 - Text only: a human-readable table is saved as `<input_stem>_chord_infos.txt` alongside your input file. This mirrors the terminal output for easy sharing. The combined `_chord_infos.mid` export has been removed.
 

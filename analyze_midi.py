@@ -31,6 +31,7 @@ try:
     from music21 import converter as m21_converter
     from music21 import key as m21_key
     from music21 import note as m21_note
+    from music21 import harmony as m21_harmony
     from music21 import roman as m21_roman
     from music21 import stream as m21_stream
     from music21 import tempo as m21_tempo
@@ -47,6 +48,7 @@ class AnalyzedChord:
     offset_quarter: float
     roman: str  # detailed figure from music21 (e.g., V6532)
     roman_simple: str  # simplified figure (e.g., V7, V65, iv6, iv64)
+    chord_text: str  # chord symbol (e.g., CMaj7, Am)
     duration_quarter: float
     inversion_label: str
     function_text: str
@@ -54,7 +56,7 @@ class AnalyzedChord:
 
     def format_row(self, bpm: Optional[float], show_notes: bool) -> str:
         """Return a formatted table row for terminal display with fixed-width columns."""
-        # Columns: idx(4)  off(8)  secs(8)  RomanSimple(8)  Figure(10)  Notes
+        # Columns: idx(4)  off(8)  secs(8)  Roman(8)  Chord(10)  Figure(10)  Inversion(10)  Function(14)  Notes
         idx_col = f"{self.index:4d}"
         off_col = f"{self.offset_quarter:8.2f}q"
         if bpm is not None and bpm > 0:
@@ -63,13 +65,14 @@ class AnalyzedChord:
         else:
             secs_col = " " * 8
         roman_simple_col = f"{self.roman_simple:>8}"
+        chord_col = f"{self.chord_text:>10}"
         roman_full_col = f"{self.roman:>10}"
         inversion_col = f"{self.inversion_label:>10}"
         function_col = f"{self.function_text:>14}"
         if show_notes:
             notes_col = ",".join(self.pitch_names)
-            return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}  {inversion_col}  {function_col}  {notes_col}"
-        return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}  {inversion_col}  {function_col}"
+            return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {chord_col}  {roman_full_col}  {inversion_col}  {function_col}  {notes_col}"
+        return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {chord_col}  {roman_full_col}  {inversion_col}  {function_col}"
 
 
 def parse_key_argument(key_text: str) -> m21_key.Key:
@@ -264,9 +267,9 @@ def export_chord_midis(export_dir: Path, input_stem: str, analyzed: List[Analyze
         ch = m21_chord.Chord(list(entry.pitch_names))
         ch.duration.quarterLength = max(0.25, float(entry.duration_quarter))
         s.append(ch)
-        chord_name = entry.roman_simple.replace('/', '-').strip()
+        safe = entry.roman_simple.replace('/', '-').strip()
         order_prefix = f"{entry.index:02d}"
-        fname = f"{input_stem}-{order_prefix}-{chord_name}.mid"
+        fname = f"{input_stem}-{order_prefix}-{safe}.mid"
         out_path = export_dir / fname
         s.write("midi", fp=str(out_path))
 
@@ -290,6 +293,7 @@ def export_chord_info_text(
         f"{'Offset(q)':>8}",
         f"{'Secs':>8}",
         f"{'Roman':>8}",
+        f"{'Chord':>10}",
         f"{'Figure':>10}",
         f"{'Inversion':>10}",
         f"{'Function':>14}",
@@ -344,12 +348,38 @@ def analyze_chords(
         roman_simple = simplify_roman_figure(roman_str)
         inversion_label = derive_inversion_label(roman_simple)
         function_text = describe_function(roman_str)
+        # Derive a chord symbol text (e.g., CMaj7, Am) using music21 harmony
+        try:
+            h = m21_harmony.chordSymbolFromChord(element)
+            chord_text = h.figure
+            # Normalize common variants for compactness
+            chord_text = chord_text.replace('maj7', 'Maj7').replace('min', 'm').replace('maj', 'Maj')
+        except Exception:
+            # Fallback: use root + quality heuristic
+            try:
+                quality = element.quality  # e.g., 'major', 'minor', 'dominant', 'diminished', 'augmented'
+                root_name = element.root().name
+                if quality == 'major':
+                    chord_text = root_name
+                elif quality == 'minor':
+                    chord_text = f"{root_name}m"
+                elif quality == 'dominant':
+                    chord_text = f"{root_name}7"
+                elif quality == 'diminished':
+                    chord_text = f"{root_name}dim"
+                elif quality == 'augmented':
+                    chord_text = f"{root_name}+"
+                else:
+                    chord_text = root_name
+            except Exception:
+                chord_text = ''
         results.append(
             AnalyzedChord(
                 index=idx,
                 offset_quarter=offset_q,
                 roman=roman_str,
                 roman_simple=roman_simple,
+                chord_text=chord_text,
                 duration_quarter=dur_q,
                 inversion_label=inversion_label,
                 function_text=function_text,
@@ -495,6 +525,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         f"{'Offset(q)':>8}",
         f"{'Secs':>8}",
         f"{'Roman':>8}",
+        f"{'Chord':>10}",
         f"{'Figure':>10}",
         f"{'Inversion':>10}",
         f"{'Function':>14}",
