@@ -48,6 +48,8 @@ class AnalyzedChord:
     roman: str  # detailed figure from music21 (e.g., V6532)
     roman_simple: str  # simplified figure (e.g., V7, V65, iv6, iv64)
     duration_quarter: float
+    inversion_label: str
+    function_text: str
     pitch_names: Tuple[str, ...]
 
     def format_row(self, bpm: Optional[float], show_notes: bool) -> str:
@@ -62,10 +64,12 @@ class AnalyzedChord:
             secs_col = " " * 8
         roman_simple_col = f"{self.roman_simple:>8}"
         roman_full_col = f"{self.roman:>10}"
+        inversion_col = f"{self.inversion_label:>10}"
+        function_col = f"{self.function_text:>14}"
         if show_notes:
             notes_col = ",".join(self.pitch_names)
-            return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}  {notes_col}"
-        return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}"
+            return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}  {inversion_col}  {function_col}  {notes_col}"
+        return f"{idx_col}  {off_col}  {secs_col}  {roman_simple_col}  {roman_full_col}  {inversion_col}  {function_col}"
 
 
 def parse_key_argument(key_text: str) -> m21_key.Key:
@@ -172,6 +176,81 @@ def simplify_roman_figure(figure: str) -> str:
     return roman_root + suffix
 
 
+def split_roman_root_and_trailing(figure: str) -> Tuple[str, str]:
+    """Split a Roman figure into root part and trailing numerals/suspensions.
+
+    Stops root at the first digit or '/' (for secondaries).
+    """
+    if not figure:
+        return "", ""
+    idx = None
+    for i, ch in enumerate(figure):
+        if ch.isdigit() or ch == '/':
+            idx = i
+            break
+    if idx is None:
+        return figure, ""
+    return figure[:idx], figure[idx:]
+
+
+def derive_inversion_label(roman_simple: str) -> str:
+    """Return human-readable inversion label from simplified roman figure.
+
+    Examples: '', '6', '64', '7', '65', '43', '42' → 'root', '1st', '2nd', 'root', ...
+    """
+    # Extract suffix digits from end
+    suffix = ""
+    for i, ch in enumerate(reversed(roman_simple)):
+        if ch.isdigit():
+            suffix = roman_simple[len(roman_simple) - 1 - i:]  # capture trailing digits
+        else:
+            break
+    # Normalize mappings
+    if suffix in ("", "53"):
+        return "root"
+    if suffix == "6" or suffix == "63":
+        return "1st"
+    if suffix == "64":
+        return "2nd"
+    if suffix == "7" or suffix == "753":
+        return "root"
+    if suffix == "65" or suffix == "653":
+        return "1st"
+    if suffix == "43" or suffix == "643":
+        return "2nd"
+    if suffix == "42" or suffix == "642":
+        return "3rd"
+    return "(inv)"
+
+
+def describe_function(roman_figure: str) -> str:
+    """Return a brief functional label for the chord.
+
+    Very simple heuristic: Tonic (I, III, VI), Predominant (II, IV), Dominant (V, VII).
+    If secondary (contains '/'), mark as Secondary. Accidentals → Chromatic.
+    """
+    if not roman_figure:
+        return ""
+    has_secondary = '/' in roman_figure
+    root, _ = split_roman_root_and_trailing(roman_figure)
+    if any(acc in root for acc in ('b', '#')):
+        base = "Chromatic"
+    else:
+        letters_only = ''.join(ch for ch in root if ch in 'ivIV')
+        deg = letters_only.upper()
+        if deg in ("I", "III", "VI"):
+            base = "Tonic"
+        elif deg in ("II", "IV"):
+            base = "Predominant"
+        elif deg in ("V", "VII"):
+            base = "Dominant"
+        else:
+            base = "Other"
+    if has_secondary:
+        return f"Secondary {base.lower()}"
+    return base
+
+
 def export_chord_midis(export_dir: Path, analyzed: List[AnalyzedChord]) -> None:
     """Write one MIDI file per chord using its pitch content and duration.
 
@@ -229,6 +308,8 @@ def analyze_chords(
 
         pitch_names = tuple(p.nameWithOctave for p in element.pitches)
         roman_simple = simplify_roman_figure(roman_str)
+        inversion_label = derive_inversion_label(roman_simple)
+        function_text = describe_function(roman_str)
         results.append(
             AnalyzedChord(
                 index=idx,
@@ -236,6 +317,8 @@ def analyze_chords(
                 roman=roman_str,
                 roman_simple=roman_simple,
                 duration_quarter=dur_q,
+                inversion_label=inversion_label,
+                function_text=function_text,
                 pitch_names=pitch_names,
             )
         )
@@ -355,18 +438,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     header_left = f"File: {midi_path.name}"
     header_right = f"Key: {effective_key.tonic.name} {effective_key.mode}"
-    print(header_left + " " * max(1, 100 - len(header_left) - len(header_right)) + header_right)
-    # Align columns with format_row(): idx(4) off(8) secs(8) RomanSimple(8) Figure(10) Notes
+    print(header_left + " " * max(1, 120 - len(header_left) - len(header_right)) + header_right)
+    # Align columns with format_row(): idx(4) off(8) secs(8) RomanSimple(8) Figure(10) Inversion(10) Function(14) Notes
     header_cols = [
         f"{'Index':>4}",
         f"{'Offset(q)':>8}",
         f"{'Secs':>8}",
         f"{'Roman':>8}",
         f"{'Figure':>10}",
+        f"{'Inversion':>10}",
+        f"{'Function':>14}",
     ]
     header_line = "  ".join(header_cols) + ("  Notes" if args.show_notes else "")
     print(header_line)
-    print("-" * 100)
+    print("-" * 120)
 
     count = 0
     for entry in analyzed:
