@@ -251,10 +251,11 @@ def describe_function(roman_figure: str) -> str:
     return base
 
 
-def export_chord_midis(export_dir: Path, analyzed: List[AnalyzedChord]) -> None:
+def export_chord_midis(export_dir: Path, input_stem: str, analyzed: List[AnalyzedChord]) -> None:
     """Write one MIDI file per chord using its pitch content and duration.
 
-    Filenames are prefixed with the row index and simplified roman.
+    Filenames follow the pattern: "<input-stem>-<chord-name>.mid",
+    where <chord-name> is the simplified Roman numeral label.
     """
     for entry in analyzed:
         s = m21_stream.Stream()
@@ -263,7 +264,8 @@ def export_chord_midis(export_dir: Path, analyzed: List[AnalyzedChord]) -> None:
         ch = m21_chord.Chord(list(entry.pitch_names))
         ch.duration.quarterLength = max(0.25, float(entry.duration_quarter))
         s.append(ch)
-        fname = f"{entry.index:03d}_{entry.roman_simple.replace('/', '-')}.mid"
+        chord_name = entry.roman_simple.replace('/', '-').strip()
+        fname = f"{input_stem}-{chord_name}.mid"
         out_path = export_dir / fname
         s.write("midi", fp=str(out_path))
 
@@ -282,6 +284,34 @@ def export_combined_chord_midi(output_path: Path, analyzed: List[AnalyzedChord])
         ch.duration.quarterLength = max(0.25, float(entry.duration_quarter))
         s.insert(float(entry.offset_quarter), ch)
     s.write("midi", fp=str(output_path))
+
+
+def export_chord_info_text(
+    output_path: Path,
+    analyzed: List[AnalyzedChord],
+    bpm: Optional[float],
+    show_notes: bool,
+    header_left: str,
+    header_right: str,
+) -> None:
+    """Write a human-readable text file with the same table shown in the terminal."""
+    lines: List[str] = []
+    lines.append(header_left + " " * max(1, 120 - len(header_left) - len(header_right)) + header_right)
+    header_cols = [
+        f"{'Index':>4}",
+        f"{'Offset(q)':>8}",
+        f"{'Secs':>8}",
+        f"{'Roman':>8}",
+        f"{'Figure':>10}",
+        f"{'Inversion':>10}",
+        f"{'Function':>14}",
+    ]
+    header_line = "  ".join(header_cols) + ("  Notes" if show_notes else "")
+    lines.append(header_line)
+    lines.append("-" * 120)
+    for entry in analyzed:
+        lines.append(entry.format_row(bpm=bpm, show_notes=show_notes))
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def analyze_chords(
@@ -448,7 +478,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         export_dir = midi_path.parent / f"{midi_path.stem}_chords"
         export_dir.mkdir(parents=True, exist_ok=True)
-        export_chord_midis(export_dir, analyzed)
+        export_chord_midis(export_dir, midi_path.stem, analyzed)
     except Exception as exc:
         print(f"Warning: failed exporting per-chord MIDIs: {exc}", file=sys.stderr)
 
@@ -458,6 +488,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         export_combined_chord_midi(combined_out, analyzed)
     except Exception as exc:
         print(f"Warning: failed exporting combined chord MIDI: {exc}", file=sys.stderr)
+
+    # Also write a human-readable text file "<midi-stem>_chord_infos.txt"
+    try:
+        txt_out = midi_path.parent / f"{midi_path.stem}_chord_infos.txt"
+        export_chord_info_text(
+            output_path=txt_out,
+            analyzed=analyzed,
+            bpm=args.bpm,
+            show_notes=bool(args.show_notes),
+            header_left=f"File: {midi_path.name}",
+            header_right=f"Key: {effective_key.tonic.name} {effective_key.mode}",
+        )
+    except Exception as exc:
+        print(f"Warning: failed exporting chord info text: {exc}", file=sys.stderr)
 
     header_left = f"File: {midi_path.name}"
     header_right = f"Key: {effective_key.tonic.name} {effective_key.mode}"

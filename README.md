@@ -59,6 +59,7 @@ Additional columns:
 
 ### MIDI exports
 
-- Per-chord: the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Each file contains the chord’s notes with the duration taken from the chordified reduction.
+- Per-chord: the script writes a separate MIDI file for each detected chord into a folder named `<input_stem>_chords` next to your input file. Files are named `<input_stem>-<chord-name>.mid` (e.g., `song-V7.mid`). Each file contains the chord’s notes with the duration taken from the chordified reduction.
 - Combined: the script also writes a single file named `<input_stem>_chord_infos.mid` next to your input. It contains all detected chords placed at their offsets with measured durations, forming a simple harmonic reduction timeline.
+- Text: a human-readable table is saved as `<input_stem>_chord_infos.txt` alongside the MIDI. This mirrors the terminal output for easy sharing.
 
